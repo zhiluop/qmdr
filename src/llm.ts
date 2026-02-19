@@ -533,6 +533,17 @@ export class RemoteLLM implements LLM {
     const baseUrl = (sf.baseUrl || "https://api.siliconflow.cn/v1").replace(/\/$/, "");
     const model = sf.embedModel || "Qwen/Qwen3-Embedding-8B";
 
+    // Qwen3-Embedding models require dimensions parameter
+    const isQwen3 = model.includes("Qwen3-Embedding");
+    const body: Record<string, unknown> = {
+      model,
+      input: text,
+      encoding_format: "float",
+    };
+    if (isQwen3) {
+      body.dimensions = sf.embedDimensions || 1024;
+    }
+
     try {
       const resp = await fetchWithRetry(`${baseUrl}/embeddings`, {
         method: "POST",
@@ -540,11 +551,7 @@ export class RemoteLLM implements LLM {
           Authorization: `Bearer ${sf.apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model,
-          input: text,
-          encoding_format: "float",
-        }),
+        body: JSON.stringify(body),
       }, { provider: "siliconflow", operation: "embed", timeoutMs: options?.timeoutMs ?? this.config.timeoutsMs?.embed });
 
       const data = await resp.json() as {
@@ -582,12 +589,23 @@ export class RemoteLLM implements LLM {
     const baseUrl = (sf.baseUrl || "https://api.siliconflow.cn/v1").replace(/\/$/, "");
     const model = sf.embedModel || "Qwen/Qwen3-Embedding-8B";
 
+    // Qwen3-Embedding models require dimensions parameter
+    const isQwen3 = model.includes("Qwen3-Embedding");
+
     // SiliconFlow supports up to ~64 texts per batch, chunk if needed
     const BATCH_SIZE = 32;
     const allResults: (EmbeddingResult | null)[] = new Array(texts.length).fill(null);
 
     for (let i = 0; i < texts.length; i += BATCH_SIZE) {
       const batch = texts.slice(i, i + BATCH_SIZE);
+      const body: Record<string, unknown> = {
+        model,
+        input: batch,
+        encoding_format: "float",
+      };
+      if (isQwen3) {
+        body.dimensions = sf.embedDimensions || 1024;
+      }
       try {
         const resp = await fetchWithRetry(`${baseUrl}/embeddings`, {
           method: "POST",
@@ -595,11 +613,7 @@ export class RemoteLLM implements LLM {
             Authorization: `Bearer ${sf.apiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            model,
-            input: batch,
-            encoding_format: "float",
-          }),
+          body: JSON.stringify(body),
         }, { provider: "siliconflow", operation: "embed", timeoutMs: this.config.timeoutsMs?.embed });
 
         const data = await resp.json() as {
